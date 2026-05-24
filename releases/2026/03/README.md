@@ -1,0 +1,36 @@
+# March 2026 - Research Publications
+
+30 publications from March 2026.
+
+## Papers
+
+* [A Deterministic Unified Theory](A Deterministic Unified Theory.md)
+* [A Unified Framework for Superdeterminism, Neurobiology, and the Mechanics of Human Meaning](A Unified Framework for Superdeterminism, Neurobiology, and the Mechanics of Human Meaning.md)
+* [Algorithmic Necessity of Agency](Algorithmic Necessity of Agency.md)
+* [All Things Are One](All Things Are One.md)
+* [Architecture of Discovery](Architecture of Discovery.MD.md)
+* [Beyond Belief](Beyond Belief.md)
+* [Care is Stronger](Care is Stronger.md)
+* [Category Error of the Ego](Category Error of the Ego.md)
+* [Clockwork Cosmos](Clockwork Cosmos.md)
+* [Computational Topology and Formal Proofs of Discrete Non-Archimedean Relational Networks](Computational Topology and Formal Proofs of Discrete Non-Archimedean Relational Networks.md)
+* [Correlated Universe](Correlated Universe.md)
+* [Deterministic Lattice](Deterministic Lattice.md)
+* [Formal Derivation of Emergent Spacetime](Formal Derivation of Emergent Spacetime.md)
+* [Functional Decoupling Framework for p-adic Hamiltonian Models of Granular Field Interactions](Functional Decoupling Framework for p-adic Hamiltonian Models of Granular Field Interactions.md)
+* [Interplay of Scientific Materialism, Human Meaning, and Epistemic Humility](Interplay of Scientific Materialism, Human Meaning, and Epistemic Humility.md)
+* [MECHANICS OF PSYCHOLOGICAL PROJECTION AND ONTOLOGICAL REALITY](MECHANICS OF PSYCHOLOGICAL PROJECTION AND ONTOLOGICAL REALITY.md)
+* [Mechanistic Ethics and the Biology of Meaning](Mechanistic Ethics and the Biology of Meaning.md)
+* [Principia Ontologica](Principia Ontologica.md)
+* [Quantum Brain Dynamics and Superdeterminism](Quantum Brain Dynamics and Superdeterminism.md)
+* [Simulated Stability and the Superdeterministic Quantum Machine](Simulated Stability and the Superdeterministic Quantum Machine.md)
+* [Simulation Inconsistency Detection via Neurobiological and Cognitive Interfaces](Simulation Inconsistency Detection via Neurobiological and Cognitive Interfaces.md)
+* [Static Architecture of Reality and Its Biological Interface](Static Architecture of Reality and Its Biological Interface.md)
+* [Static Architecture of Reality](Static Architecture of Reality.md)
+* [Super-Universe](Super-Universe.md)
+* [Superdeterministic Amplification of Macroscopic Neural State Vectors](Superdeterministic Amplification of Macroscopic Neural State Vectors.md)
+* [Threshold of Meaning](Threshold of Meaning.md)
+* [Time as Epistemic Cognitive Fiction](Time as Epistemic Cognitive Fiction.md)
+* [Topological Aliasing and Holographic Readout](Topological Aliasing and Holographic Readout.md)
+* [UNIFIED FORMAL ONTOLOGY OF THE CORRELATED UNIVERSE](UNIFIED FORMAL ONTOLOGY OF THE CORRELATED UNIVERSE.md)
+* [Unified Theory of Non-Archimedean Ontology](Unified Theory of Non-Archimedean Ontology.md)

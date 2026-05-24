@@ -1,0 +1,35 @@
+# GitBook Configuration for QNFO/QWAV
+
+# Organization/space identifier
+title: "QNFO Research — Ultrametric Quantum Computing & AI"
+description: "Publications and research documentation from QNFO: advancing scientific understanding of ultrametric quantum computing, p-adic physics, and glass-box AI for the collective benefit of all."
+logo: ""
+favicon: ""
+
+# Git Sync configuration
+git:
+  provider: github
+  url: https://github.com/QNFO/gitbook
+  ref: main
+
+# Site structure
+structure:
+  summary: SUMMARY.md
+
+# Translations (configured via GitBook UI after space creation)
+# Target languages: zh, es, fr, ar, ru, pt, ja, de, ko, hi
+
+# Theme
+theme: default
+styles:
+  code:
+    theme: light
+
+# SEO
+seo:
+  title: "QNFO Research — Ultrametric Quantum Computing"
+  description: "Open-access research on ultrametric geometry for fault-tolerant quantum computing and glass-box AI. Published by QNFO for the collective benefit of all."
+  robots: "index, follow"
+
+# Redirects (if moving from old URLs)
+redirects: {}

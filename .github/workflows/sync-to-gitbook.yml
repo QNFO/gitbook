@@ -1,0 +1,74 @@
+name: Sync QWAV Releases to GitBook
+
+on:
+  # Run on push to QWAV main (when new releases are added)
+  push:
+    branches: [main]
+    paths:
+      - 'Obsidian/releases/**/*.md'
+  # Run weekly to catch any missed releases
+  schedule:
+    - cron: '0 6 * * 1'  # Every Monday at 06:00 UTC
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  sync-to-gitbook:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout QWAV repo
+        uses: actions/checkout@v4
+        with:
+          path: qwav
+
+      - name: Checkout GitBook repo
+        uses: actions/checkout@v4
+        with:
+          repository: QNFO/gitbook
+          path: gitbook
+          token: ${{ secrets.GITBOOK_REPO_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Copy release sync script
+        run: |
+          cp qwav/scripts/sync_releases.py gitbook/scripts/sync_releases.py
+          # If script doesn't exist in QWAV yet, use the standalone version
+          if [ ! -f gitbook/scripts/sync_releases.py ]; then
+            echo "Sync script not found in QWAV, using .github version"
+          fi
+
+      - name: Run sync
+        run: |
+          cd gitbook
+          python scripts/sync_releases.py --since $(date -d '7 days ago' +%Y-%m)
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          cd gitbook
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          cd gitbook
+          git config user.name "QNFO GitBook Bot"
+          git config user.email "gitbook-bot@qnfo.org"
+          git add content/
+          git commit -m "sync: auto-update releases $(date +%Y-%m-%d)
+
+          Automated sync from QWAV Obsidian/releases/ to GitBook content.
+          Triggered by: ${{ github.event_name }}"
+          git push origin main
+
+      - name: Report status
+        if: steps.check_changes.outputs.changed == 'false'
+        run: echo "No changes detected — GitBook content is up to date."
