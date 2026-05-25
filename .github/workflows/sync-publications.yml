@@ -1,134 +1,116 @@
-permissions:
-  contents: write
 name: Sync Publications to GitBook
 
+permissions:
+  contents: write
+
 on:
-  wor kflow_dispatch:
+  workflow_dispatch:
   schedule:
-    - cron: "0 6  * * 1"
+    - cron: "0 6 * * 1"
   repository_dispatch:
-    types: [pub lications-updated]
+    types: [publications-updated]
 
 jobs:
   sync:
-    runs-on : ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
-      - name: Chec kout .github repo (publications source)
-         uses: actions/checkout@v4
+      - name: Checkout .github repo (publications source)
+        uses: actions/checkout@v4
         with:
-           repository: QNFO/.github
-          pa th: source
+          repository: QNFO/.github
+          path: source
           ref: master
 
-      - nam e: Checkout GitBook repo (target)
-        use s: actions/checkout@v4
+      - name: Checkout GitBook repo (target)
+        uses: actions/checkout@v4
         with:
-           path: gitbook
+          path: gitbook
 
-      - uses: actions/setup- python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-vers ion: "3.12"
+          python-version: "3.12"
 
       - name: Sync publications
-         run: |
-          import os, re, shuti l
+        shell: python
+        run: |
+          import os, re, shutil
           from pathlib import Path
-           from collections import defaultdict
+          from collections import defaultdict
 
-           SOURCE = Path("source/publications")
-           TARGET = Path("gitbook/releases")
+          SOURCE = Path("source/publications")
+          TARGET = Path("gitbook/releases")
 
-           if not SOURCE.exists():
-              p rint(f"Source directory not found: {SOURCE}") 
+          if not SOURCE.exists():
+              print("Source directory not found: " + str(SOURCE))
               exit(1)
 
-          TARGET.mkdi r(parents=True, exist_ok=True)
+          TARGET.mkdir(parents=True, exist_ok=True)
 
-          # C ollect all .md files from source
-          pu blications = defaultdict(list)
-          for  md_file in sorted(SOURCE.rglob("*.md")):
-               if md_file.name.startswith("_"):
-                   continue
-              rel =  md_file.relative_to(SOURCE)
-              par ts = rel.parts
-              year = parts[0]  if len(parts) > 0 else "unknown"
-               publications[year].append(md_file)
+          publications = defaultdict(list)
+          for md_file in sorted(SOURCE.rglob("*.md")):
+              if md_file.name.startswith("_"):
+                  continue
+              rel = md_file.relative_to(SOURCE)
+              parts = rel.parts
+              year = parts[0] if len(parts) > 0 else "unknown"
+              publications[year].append(md_file)
 
-           # Copy files to gitbook/releases/YYYY/MM/f ilename.md
           copied = 0
-          for  year, files in sorted(publications.items()): 
+          for year, files in sorted(publications.items()):
               for src in files:
-                   rel = src.relative_to(SOURCE)
-                   dst = TARGET / rel
-                   dst.parent.mkdir(parents=True, exist_ok=True )
+                  rel = src.relative_to(SOURCE)
+                  dst = TARGET / rel
+                  dst.parent.mkdir(parents=True, exist_ok=True)
                   shutil.copy2(src, dst)
-                   copied += 1
+                  copied += 1
 
-          print( f"Copied {copied} publication files")
+          print("Copied " + str(copied) + " publication files")
 
-           # Generate SUMMARY.md
-          summary_l ines = [
-              "# Table of Contents", 
-              "",
-              "* [Home](RE ADME.md)",
-              "* [About QNFO](ABOU T.md)",
-              "* [License](LICENSE.md )",
-              "",
-              "## Resea rch Publications",
-              "",
-           ]
+          by_month = defaultdict(list)
+          for year in sorted(publications.keys(), reverse=True):
+              for f in sorted(publications[year]):
+                  rel = f.relative_to(SOURCE)
+                  parts = rel.parts
+                  month = parts[1] if len(parts) > 1 else "00"
+                  by_month[month].append(f)
 
-          for year in sorted(publication s.keys(), reverse=True):
-              year_f iles = sorted(publications[year])
-               summary_lines.append(f"### {year} ({len(ye ar_files)} papers)")
-              summary_li nes.append("")
+          summary_lines = ["# Table of Contents", "", "* [Home](README.md)", "* [About QNFO](ABOUT.md)", "* [License](LICENSE.md)", "", "## Research Publications", ""]
+          for year in sorted(publications.keys(), reverse=True):
+              summary_lines.append("### " + year + " (" + str(len(publications[year])) + " papers)")
+              summary_lines.append("")
+              year_months = sorted(set(p[0] for p in [f.relative_to(SOURCE).parts for f in sorted(publications[year])]))
+              for month in sorted(year_months):
+                  month_files = sorted([f for f in publications[year] if f.relative_to(SOURCE).parts[1] == month])
+                  summary_lines.append("* **" + year + "-" + month + "**")
+                  for f in month_files:
+                      rel = str(f.relative_to(SOURCE)).replace("\\", "/")
+                      title = f.stem[:80]
+                      summary_lines.append("  * [" + title + "](releases/" + rel + ")")
+                  summary_lines.append("")
 
-              # Group by mont h
-              by_month = defaultdict(list)
-               for f in year_files:
-                   rel = f.relative_to(SOURCE)
-                   parts = rel.parts
-                   month = parts[1] if len(parts) > 1 else "00"
-                   by_month[month].append(f)
+          with open("gitbook/SUMMARY.md", "w", encoding="utf-8") as sf:
+              sf.write("\n".join(summary_lines))
+          print("Generated SUMMARY.md")
 
-               for month in sorted(by_month.ke ys()):
-                  month_files = sorted (by_month[month])
-                  summary_l ines.append(f"* **{year}-{month}**")
-                   for f in month_files:
-                       rel = str(f.relative_to(SOURCE)).rep lace("\\", "/")
-                      rel_pat h = f"releases/{rel}"
-                      t itle = f.stem
-                      title = r e.sub(r"^\\d{4}-\\d{2}-", "", title)
-                       title = title[:80]
-                       summary_lines.append(f"  * [{title} ]({rel_path})")
-                  summary_lin es.append("")
-
-          summary_path = Path( "gitbook/SUMMARY.md")
-          summary_path. write_text("\\n".join(summary_lines), encodin g="utf-8")
-          print(f"Generated SUMMAR Y.md ({summary_path.stat().st_size} bytes)")
- 
-        shell: python
-
-      - name: Check f or changes
+      - name: Check for changes
         id: check
         run: |
-           cd gitbook
-          if [ -n "$(git  status --porcelain)" ]; then
-            echo  "changed=true" >> $GITHUB_OUTPUT
-          e lse
-            echo "changed=false" >> $GITH UB_OUTPUT
+          cd gitbook
+          if [ -n "?? _temp/" ]; then
+            echo "changed=true" >> 
+          else
+            echo "changed=false" >> 
           fi
 
-      - name: Commit  and push
-        if: steps.check.outputs.chan ged == 'true'
+      - name: Commit and push
+        if: steps.check.outputs.changed == 'true'
         run: |
-          cd git book
-          git config user.name "QNFO Git Book Bot"
-          git config user.email "gi tbook-bot@qnfo.org"
-          git add release s/ SUMMARY.md
-          git commit -m "sync:  auto-update publications $(date +%Y-%m-%d)
+          cd gitbook
+          git config user.name "QNFO GitBook Bot"
+          git config user.email "gitbook-bot@qnfo.org"
+          git add releases/ SUMMARY.md
+          git commit -m "sync: auto-update publications 
 
-           Automated sync from QNFO/.github/pub lications/
-          Triggered by: ${{ github .event_name }}"
-          git push origin mai n
- 
+          Automated sync from QNFO/.github/publications/
+          Triggered by: ${{ github.event_name }}"
+          git push origin main
