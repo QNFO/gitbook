@@ -118,7 +118,7 @@ jobs:
           fi
 
       - name: Commit and push
-        if: steps.check.outputs.changed == "true"
+        if: steps.check.outputs.changed == 'true'
         run: |
           cd gitbook
           git config user.name "QNFO GitBook Bot"
