@@ -13,14 +13,17 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout publications source
+        uses: actions/checkout@v4
         with:
           repository: QNFO/.github
           path: source
           ref: master
 
-      - uses: actions/checkout@v4
+      - name: Checkout GitBook repo
+        uses: actions/checkout@v4
         with:
           path: gitbook
 
@@ -39,22 +42,37 @@ jobs:
           TARGET = Path("gitbook/releases")
 
           if not SOURCE.exists():
-              print("ERROR: Source not found")
-              exit(1)
+              print("ERROR: Source directory not found — skipping sync")
+              exit(0)
 
           TARGET.mkdir(parents=True, exist_ok=True)
 
-          # Copy files
+          # Remove stale files first (clean sync)
+          existing = set()
+          for f in TARGET.rglob("*.md"):
+              existing.add(f.relative_to(TARGET))
+          
           copied = 0
+          new_files = set()
           for md_file in sorted(SOURCE.rglob("*.md")):
               if md_file.name.startswith("_"):
                   continue
               rel = md_file.relative_to(SOURCE)
               dst = TARGET / rel
+              new_files.add(rel)
               dst.parent.mkdir(parents=True, exist_ok=True)
               shutil.copy2(md_file, dst)
               copied += 1
-          print(f"Copied {copied} files")
+          
+          # Remove files that no longer exist in source
+          removed = 0
+          for old_rel in existing - new_files:
+              old_file = TARGET / old_rel
+              if old_file.exists():
+                  old_file.unlink()
+                  removed += 1
+          
+          print(f"Copied {copied}, removed {removed} stale files")
 
           # Generate SUMMARY.md
           years = sorted(set(p.parts[0] for p in [f.relative_to(SOURCE) for f in SOURCE.rglob("*.md") if not f.name.startswith("_")]))
@@ -63,15 +81,16 @@ jobs:
           for year in sorted(years, reverse=True):
               year_files = sorted(SOURCE.rglob(f"{year}/**/*.md"))
               year_files = [f for f in year_files if not f.name.startswith("_")]
+              if not year_files:
+                  continue
               lines.append(f"### {year} ({len(year_files)} papers)")
               lines.append("")
-
               months = sorted(set(f.relative_to(SOURCE).parts[1] for f in year_files if len(f.relative_to(SOURCE).parts) >= 2))
               for month in months:
                   month_files = sorted([f for f in year_files if f.relative_to(SOURCE).parts[1] == month])
                   lines.append(f"* **{year}-{month}**")
                   for f in month_files:
-                      rel = str(f.relative_to(SOURCE)).replace("", "/")
+                      rel = str(f.relative_to(SOURCE)).replace("\\", "/")
                       name = f.stem[:80]
                       lines.append(f"  * [{name}](releases/{rel})")
                   lines.append("")
@@ -80,15 +99,36 @@ jobs:
           summary_path.write_text("\n".join(lines), encoding="utf-8")
           print(f"Generated SUMMARY.md ({summary_path.stat().st_size} bytes)")
 
-      - name: Commit and push
+      - name: Check for changes
+        id: check
         run: |
           cd gitbook
-          if [ -n "?? _temp/" ]; then
-            git config user.name "QNFO GitBook Bot"
-            git config user.email "gitbook-bot@qnfo.org"
-            git add releases/ SUMMARY.md
-            git commit -m "sync: auto-update publications "
-            git push origin main
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
           else
-            echo "No changes"
+            echo "changed=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Commit and push (with retry)
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          cd gitbook
+          git config user.name "QNFO GitBook Bot"
+          git config user.email "gitbook-bot@qnfo.org"
+          git add releases/ SUMMARY.md
+          git commit -m "sync: auto-update publications $(date +%Y-%m-%d)"
+          
+          # Retry push up to 3 times (network blips)
+          for i in 1 2 3; do
+            echo "Push attempt $i/3..."
+            if git push origin main 2>&1; then
+              echo "Push succeeded"
+              exit 0
+            fi
+            if [ $i -eq 3 ]; then
+              echo "FATAL: Push failed after 3 attempts"
+              exit 1
+            fi
+            echo "Push failed, retrying in 15s..."
+            sleep 15
+          done
