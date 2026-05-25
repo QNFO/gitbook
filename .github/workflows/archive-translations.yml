@@ -1,0 +1,75 @@
+name: Archive GitBook Translations
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 8 * * 0"  # Every Sunday at 08:00 UTC
+  repository_dispatch:
+    types: [translations-updated]
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: gitbook
+
+      - name: Fetch translations from GitBook API
+        env:
+          GITBOOK_TOKEN: ${{ secrets.GITBOOK_API_TOKEN }}
+          GITBOOK_ORG_ID: ${{ secrets.GITBOOK_ORG_ID }}
+        run: |
+          LANGUAGES="zh es fr ar ru pt ja de ko hi"
+          for LANG in $LANGUAGES; do
+            echo "Fetching $LANG translations..."
+            
+            # GitBook API: list translated pages for this language
+            RESPONSE=$(curl -s -H "Authorization: Bearer $GITBOOK_TOKEN" \
+              "https://api.gitbook.com/v1/orgs/$GITBOOK_ORG_ID/spaces?limit=50")
+            
+            # Find the translation space for this language
+            SPACE_ID=$(echo "$RESPONSE" | jq -r ".items[] | select(.language == \"$LANG\") | .id" | head -1)
+            
+            if [ -n "$SPACE_ID" ] && [ "$SPACE_ID" != "null" ]; then
+              echo "Found space $SPACE_ID for $LANG"
+              
+              # Get all pages for this space
+              PAGES=$(curl -s -H "Authorization: Bearer $GITBOOK_TOKEN" \
+                "https://api.gitbook.com/v1/spaces/$SPACE_ID/content/pages?limit=1000")
+              
+              # Download each page markdown
+              mkdir -p "gitbook/translations/$LANG"
+              echo "$PAGES" | jq -r '.pages[] | "\(.path) \(.id)"' | while read PATH PAGE_ID; do
+                PAGE_PATH=$(echo "$PATH" | sed 's|^/||')
+                mkdir -p "gitbook/translations/$LANG/$(dirname "$PAGE_PATH")"
+                
+                CONTENT=$(curl -s -H "Authorization: Bearer $GITBOOK_TOKEN" \
+                  "https://api.gitbook.com/v1/spaces/$SPACE_ID/content/page/$PAGE_ID?format=markdown")
+                
+                echo "$CONTENT" | jq -r '.data.markdown // empty' > "gitbook/translations/$LANG/$PAGE_PATH.md" 2>/dev/null
+              done
+              
+              COUNT=$(find "gitbook/translations/$LANG" -name "*.md" | wc -l)
+              echo "  Archived $COUNT pages for $LANG"
+            else
+              echo "  No translation space found for $LANG (may not be configured yet)"
+            fi
+          done
+
+      - name: Commit translation archive
+        run: |
+          cd gitbook
+          if [ -n "$(git status --porcelain translations/)" ]; then
+            git config user.name "QNFO Translation Bot"
+            git config user.email "translations@qnfo.org"
+            git add translations/
+            git commit -m "archive: translation sync $(date +%Y-%m-%d)
+
+          Automated archival of GitBook AI translations for:
+          zh, es, fr, ar, ru, pt, ja, de, ko, hi"
+            git push origin main
+            echo "Translations archived and committed"
+          else
+            echo "No translation changes detected"
+          fi
