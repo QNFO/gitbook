@@ -3,73 +3,74 @@ name: Archive GitBook Translations
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 8 * * 0"  # Every Sunday at 08:00 UTC
+    - cron: "0 8 * * 0"
   repository_dispatch:
     types: [translations-updated]
 
 jobs:
   archive:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
           path: gitbook
 
-      - name: Fetch translations from GitBook API
+      - name: Fetch translations (with retry)
         env:
           GITBOOK_TOKEN: ${{ secrets.GITBOOK_API_TOKEN }}
           GITBOOK_ORG_ID: ${{ secrets.GITBOOK_ORG_ID }}
         run: |
           LANGUAGES="zh es fr ar ru pt ja de ko hi"
+          FAILED=""
           for LANG in $LANGUAGES; do
-            echo "Fetching $LANG translations..."
-            
-            # GitBook API: list translated pages for this language
-            RESPONSE=$(curl -s -H "Authorization: Bearer $GITBOOK_TOKEN" \
-              "https://api.gitbook.com/v1/orgs/$GITBOOK_ORG_ID/spaces?limit=50")
-            
-            # Find the translation space for this language
-            SPACE_ID=$(echo "$RESPONSE" | jq -r ".items[] | select(.language == \"$LANG\") | .id" | head -1)
-            
+            echo "=== $LANG ==="
+            for attempt in 1 2 3; do
+              RESPONSE=$(curl -s --max-time 30 -H "Authorization: Bearer $GITBOOK_TOKEN" \
+                "https://api.gitbook.com/v1/orgs/$GITBOOK_ORG_ID/translations?language=$LANG")
+              if echo "$RESPONSE" | grep -q '"items"'; then break; fi
+              [ $attempt -eq 3 ] && { echo "  SKIP: API fail after 3 attempts"; FAILED="$FAILED $LANG"; continue 2; }
+              sleep 10
+            done
+            SPACE_ID=$(echo "$RESPONSE" | jq -r '.items[0].result.space // empty')
             if [ -n "$SPACE_ID" ] && [ "$SPACE_ID" != "null" ]; then
-              echo "Found space $SPACE_ID for $LANG"
-              
-              # Get all pages for this space
-              PAGES=$(curl -s -H "Authorization: Bearer $GITBOOK_TOKEN" \
-                "https://api.gitbook.com/v1/spaces/$SPACE_ID/content/pages?limit=1000")
-              
-              # Download each page markdown
+              echo "  Space: $SPACE_ID"
               mkdir -p "gitbook/translations/$LANG"
-              echo "$PAGES" | jq -r '.pages[] | "\(.path) \(.id)"' | while read PATH PAGE_ID; do
+              for attempt in 1 2 3; do
+                PAGES=$(curl -s --max-time 30 -H "Authorization: Bearer $GITBOOK_TOKEN" \
+                  "https://api.gitbook.com/v1/spaces/$SPACE_ID/content/pages?limit=1000")
+                if echo "$PAGES" | grep -q '"pages"'; then break; fi
+                [ $attempt -eq 3 ] && { echo "  SKIP: pages fail"; FAILED="$FAILED $LANG"; continue 2; }
+                sleep 10
+              done
+              COUNT=0
+              echo "$PAGES" | jq -r '.pages[]? | "\(.path) \(.id)"' | while read PATH PAGE_ID; do
+                [ -z "$PATH" ] && continue
                 PAGE_PATH=$(echo "$PATH" | sed 's|^/||')
                 mkdir -p "gitbook/translations/$LANG/$(dirname "$PAGE_PATH")"
-                
-                CONTENT=$(curl -s -H "Authorization: Bearer $GITBOOK_TOKEN" \
-                  "https://api.gitbook.com/v1/spaces/$SPACE_ID/content/page/$PAGE_ID?format=markdown")
-                
-                echo "$CONTENT" | jq -r '.data.markdown // empty' > "gitbook/translations/$LANG/$PAGE_PATH.md" 2>/dev/null
+                curl -s --max-time 20 -H "Authorization: Bearer $GITBOOK_TOKEN" \
+                  "https://api.gitbook.com/v1/spaces/$SPACE_ID/content/page/$PAGE_ID?format=markdown" | \
+                  jq -r '.data.markdown // empty' > "gitbook/translations/$LANG/$PAGE_PATH.md" 2>/dev/null
+                [ -s "gitbook/translations/$LANG/$PAGE_PATH.md" ] && COUNT=$((COUNT + 1))
               done
-              
-              COUNT=$(find "gitbook/translations/$LANG" -name "*.md" | wc -l)
-              echo "  Archived $COUNT pages for $LANG"
+              echo "  Pages: $COUNT"
             else
-              echo "  No translation space found for $LANG (may not be configured yet)"
+              echo "  No translation space (skipping)"
             fi
           done
+          [ -n "$FAILED" ] && echo "::warning::Failed: $FAILED"
 
-      - name: Commit translation archive
+      - name: Commit archive
         run: |
           cd gitbook
-          if [ -n "$(git status --porcelain translations/)" ]; then
+          if [ -n "$(git status --porcelain translations/ 2>/dev/null)" ]; then
             git config user.name "QNFO Translation Bot"
             git config user.email "translations@qnfo.org"
             git add translations/
-            git commit -m "archive: translation sync $(date +%Y-%m-%d)
-
-          Automated archival of GitBook AI translations for:
-          zh, es, fr, ar, ru, pt, ja, de, ko, hi"
-            git push origin main
-            echo "Translations archived and committed"
-          else
-            echo "No translation changes detected"
+            git commit -m "archive: translation sync $(date +%Y-%m-%d)"
+            for i in 1 2 3; do
+              if git push origin main 2>&1; then echo "Push OK"; exit 0; fi
+              [ $i -eq 3 ] && { echo "FATAL: push fail after 3"; exit 1; }
+              sleep 15
+            done
           fi
