@@ -7,12 +7,19 @@ on:
   repository_dispatch:
     types: [translations-updated]
 
+permissions:
+  contents: write
+
+concurrency:
+  group: archive-translations
+  cancel-in-progress: false
+
 jobs:
   archive:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           path: gitbook
 
@@ -44,15 +51,17 @@ jobs:
                 sleep 10
               done
               COUNT=0
-              echo "$PAGES" | jq -r '.pages[]? | "\(.path) \(.id)"' | while read PATH PAGE_ID; do
-                [ -z "$PATH" ] && continue
-                PAGE_PATH=$(echo "$PATH" | sed 's|^/||')
+              # PAGE_URL_PATH, never PATH: assigning PATH clobbered the shell's search path, so sed, mkdir, curl and jq
+              # were not found inside this loop. Process substitution keeps COUNT in this shell (a pipe ran the loop in a subshell).
+              while read -r PAGE_URL_PATH PAGE_ID; do
+                [ -z "$PAGE_URL_PATH" ] && continue
+                PAGE_PATH="${PAGE_URL_PATH#/}"
                 mkdir -p "gitbook/translations/$LANG/$(dirname "$PAGE_PATH")"
                 curl -s --max-time 20 -H "Authorization: Bearer $GITBOOK_TOKEN" \
                   "https://api.gitbook.com/v1/spaces/$SPACE_ID/content/page/$PAGE_ID?format=markdown" | \
                   jq -r '.data.markdown // empty' > "gitbook/translations/$LANG/$PAGE_PATH.md" 2>/dev/null
-                [ -s "gitbook/translations/$LANG/$PAGE_PATH.md" ] && COUNT=$((COUNT + 1))
-              done
+                if [ -s "gitbook/translations/$LANG/$PAGE_PATH.md" ]; then COUNT=$((COUNT + 1)); fi
+              done < <(echo "$PAGES" | jq -r '.pages[]? | "\(.path) \(.id)"')
               echo "  Pages: $COUNT"
             else
               echo "  No translation space (skipping)"
