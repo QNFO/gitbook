@@ -3,6 +3,11 @@ name: Sync Publications to GitBook
 permissions:
   contents: write
 
+# One run at a time: the job pushes to main.
+concurrency:
+  group: sync-publications
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
   schedule:
@@ -16,18 +21,18 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout publications source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: QNFO/.github
           path: source
           ref: master
 
       - name: Checkout GitBook repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: gitbook
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
