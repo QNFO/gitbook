@@ -17,7 +17,7 @@ concurrency:
 jobs:
   archive:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -28,48 +28,69 @@ jobs:
           GITBOOK_TOKEN: ${{ secrets.GITBOOK_API_TOKEN }}
           GITBOOK_ORG_ID: ${{ secrets.GITBOOK_ORG_ID }}
         run: |
-          LANGUAGES="zh es fr ar ru pt ja de ko hi"
+          export API="https://api.gitbook.com/v1"
+          export AUTH="Authorization: Bearer $GITBOOK_TOKEN"
           FAILED=""
-          for LANG in $LANGUAGES; do
-            echo "=== $LANG ==="
+          # A translation is a revision of the source space, not a space of its own: result.space is the source space and
+          # result.revision is the translated copy. Read it from /revisions/<revision>; /content is the English source.
+          fetch_page() {
+            page_path="${1#/}"
+            [ -z "$page_path" ] && page_path="index"
+            case "$page_path" in *..*) echo "$2" >> "$STAGE/.failed"; return 1 ;; esac
+            mkdir -p "$STAGE/$(dirname "$page_path")"
             for attempt in 1 2 3; do
-              RESPONSE=$(curl -s --max-time 30 -H "Authorization: Bearer $GITBOOK_TOKEN" \
-                "https://api.gitbook.com/v1/orgs/$GITBOOK_ORG_ID/translations?language=$LANG")
-              if echo "$RESPONSE" | grep -q '"items"'; then break; fi
-              [ $attempt -eq 3 ] && { echo "  SKIP: API fail after 3 attempts"; FAILED="$FAILED $LANG"; continue 2; }
+              body=$(curl -s --max-time 30 -H "$AUTH" "$API/spaces/$SPACE_ID/revisions/$REVISION/page/$2?format=markdown" || true)
+              if printf '%s' "$body" | jq -e '.markdown | type == "string"' > /dev/null 2>&1; then
+                printf '%s' "$body" | jq -r '.markdown' > "$STAGE/$page_path.md"
+                return 0
+              fi
+              sleep $((attempt * 3))
+            done
+            echo "$2" >> "$STAGE/.failed"
+            return 1
+          }
+          export -f fetch_page
+          for attempt in 1 2 3; do
+            TRANSLATIONS=$(curl -s --max-time 30 -H "$AUTH" "$API/orgs/$GITBOOK_ORG_ID/translations?limit=1000" || true)
+            if printf '%s' "$TRANSLATIONS" | grep -q '"items"'; then break; fi
+            [ $attempt -eq 3 ] && { echo "::error::translations list failed after 3 attempts"; exit 1; }
+            sleep 10
+          done
+          for TLANG in $(printf '%s' "$TRANSLATIONS" | jq -r '[.items[]? | select(.status == "completed" and .result.revision != null) | .language] | unique | .[]'); do
+            echo "=== $TLANG ==="
+            ITEM=$(printf '%s' "$TRANSLATIONS" | jq -c --arg lang "$TLANG" '[.items[] | select(.language == $lang and .status == "completed" and .result.revision != null)] | sort_by(.updatedAt) | last')
+            export SPACE_ID REVISION
+            SPACE_ID=$(printf '%s' "$ITEM" | jq -r '.result.space')
+            REVISION=$(printf '%s' "$ITEM" | jq -r '.result.revision')
+            DEST="gitbook/translations/$TLANG"
+            if [ "$(cat "$DEST/.revision" 2>/dev/null)" = "$REVISION" ]; then echo "  Revision $REVISION already archived"; continue; fi
+            for attempt in 1 2 3; do
+              PAGES=$(curl -s --max-time 30 -H "$AUTH" "$API/spaces/$SPACE_ID/revisions/$REVISION/pages" || true)
+              if printf '%s' "$PAGES" | grep -q '"pages"'; then break; fi
+              [ $attempt -eq 3 ] && { echo "  SKIP: pages fail"; FAILED="$FAILED $TLANG"; continue 2; }
               sleep 10
             done
-            SPACE_ID=$(echo "$RESPONSE" | jq -r '.items[0].result.space // empty')
-            if [ -n "$SPACE_ID" ] && [ "$SPACE_ID" != "null" ]; then
-              echo "  Space: $SPACE_ID"
-              mkdir -p "gitbook/translations/$LANG"
-              for attempt in 1 2 3; do
-                PAGES=$(curl -s --max-time 30 -H "Authorization: Bearer $GITBOOK_TOKEN" \
-                  "https://api.gitbook.com/v1/spaces/$SPACE_ID/content/pages?limit=1000")
-                if echo "$PAGES" | grep -q '"pages"'; then break; fi
-                [ $attempt -eq 3 ] && { echo "  SKIP: pages fail"; FAILED="$FAILED $LANG"; continue 2; }
-                sleep 10
-              done
-              COUNT=0
-              # PAGE_URL_PATH, never PATH: assigning PATH clobbered the shell's search path, so sed, mkdir, curl and jq
-              # were not found inside this loop. Process substitution keeps COUNT in this shell (a pipe ran the loop in a subshell).
-              while read -r PAGE_URL_PATH PAGE_ID; do
-                [ -z "$PAGE_URL_PATH" ] && continue
-                PAGE_PATH="${PAGE_URL_PATH#/}"
-                mkdir -p "gitbook/translations/$LANG/$(dirname "$PAGE_PATH")"
-                curl -s --max-time 20 -H "Authorization: Bearer $GITBOOK_TOKEN" \
-                  "https://api.gitbook.com/v1/spaces/$SPACE_ID/content/page/$PAGE_ID?format=markdown" | \
-                  jq -r '.data.markdown // empty' > "gitbook/translations/$LANG/$PAGE_PATH.md" 2>/dev/null
-                if [ -s "gitbook/translations/$LANG/$PAGE_PATH.md" ]; then COUNT=$((COUNT + 1)); fi
-              done < <(echo "$PAGES" | jq -r '.pages[]? | "\(.path) \(.id)"')
-              echo "  Pages: $COUNT"
-            else
-              echo "  No translation space (skipping)"
+            export STAGE="gitbook/translations/.stage-$TLANG"
+            rm -rf "$STAGE"
+            mkdir -p "$STAGE"
+            # Four fetches at a time. Only document pages have a body; groups and links have none.
+            printf '%s' "$PAGES" | jq -j '[.pages[]? | recurse(.pages[]?)] | .[] | select((.kind // "sheet") == "sheet") | "\(.path)\u0000\(.id)\u0000"' | xargs -r -0 -n 2 -P 4 bash -c 'fetch_page "$@"' _ || true
+            if [ -e "$STAGE/.failed" ]; then
+              echo "  SKIP: $(wc -l < "$STAGE/.failed") page(s) failed; keeping the previous archive"
+              FAILED="$FAILED $TLANG"
+              rm -rf "$STAGE"
+              continue
             fi
+            COUNT=$(find "$STAGE" -type f -name '*.md' | wc -l)
+            rm -rf "$DEST"
+            mv "$STAGE" "$DEST"
+            printf '%s\n' "$REVISION" > "$DEST/.revision"
+            echo "  Revision $REVISION, pages: $COUNT"
           done
-          [ -n "$FAILED" ] && echo "::warning::Failed: $FAILED"
+          if [ -n "$FAILED" ]; then echo "::warning::Failed:$FAILED"; fi
 
       - name: Commit archive
+        if: github.ref == 'refs/heads/main'
         run: |
           cd gitbook
           if [ -n "$(git status --porcelain translations/ 2>/dev/null)" ]; then
