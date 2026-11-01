@@ -1,0 +1,3 @@
+# \[局所決定論的宇宙における創発的相関]\(releases/2025/12/EMERGENT CORRELATION IN A LOCAL-DETERMINISTIC UNIVERSE.md)
+
+

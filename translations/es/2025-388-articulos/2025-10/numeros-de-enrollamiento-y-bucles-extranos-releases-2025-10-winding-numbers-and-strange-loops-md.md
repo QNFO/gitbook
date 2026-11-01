@@ -1,0 +1,3 @@
+# \[Números de enrollamiento y bucles extraños]\(releases/2025/10/Winding Numbers and Strange Loops.md)
+
+

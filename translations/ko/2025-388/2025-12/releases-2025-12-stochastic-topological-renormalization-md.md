@@ -1,0 +1,3 @@
+# \[확률적 위상 재규격화]\(releases/2025/12/STOCHASTIC TOPOLOGICAL RENORMALIZATION.md)
+
+

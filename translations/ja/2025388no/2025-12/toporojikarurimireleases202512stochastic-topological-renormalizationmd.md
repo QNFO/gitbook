@@ -1,0 +1,3 @@
+# \[確率的トポロジカル繰り込み]\(releases/2025/12/STOCHASTIC TOPOLOGICAL RENORMALIZATION.md)
+
+

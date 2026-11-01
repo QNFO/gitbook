@@ -1,0 +1,3 @@
+# \[عبادة الشحنة بعد 50 عامًا]\(releases/2025/10/Cargo Cult 50 Years Later.md)
+
+

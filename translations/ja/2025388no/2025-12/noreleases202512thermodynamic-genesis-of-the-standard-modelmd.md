@@ -1,0 +1,3 @@
+# \[標準模型の熱力学的起源]\(releases/2025/12/THERMODYNAMIC GENESIS OF THE STANDARD MODEL.md)
+
+

@@ -1,0 +1,3 @@
+# \[8 Distinguindo Hipóteses]\(releases/2025/00/Simplicity of Reality/8 Distinguishing Hypotheses.md)
+
+

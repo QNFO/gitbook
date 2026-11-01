@@ -1,0 +1,3 @@
+# \[국소-결정론적 우주에서의 창발적 상관]\(releases/2025/12/EMERGENT CORRELATION IN A LOCAL-DETERMINISTIC UNIVERSE.md)
+
+
