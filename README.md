@@ -5,7 +5,7 @@
 > QWAV is the flagship research initiative of [QNFO](https://github.com/QNFO/.github),
 > a scientific research incubator advancing knowledge for the **collective benefit
 > of all**. QNFO is the research identity of Empowering Change (501c3). All work
-> is governed by the [QNFO Content License Agreement](LICENSE) and
+> is governed by the [QNFO Unified License Agreement v2.1](LICENSE) and
 > [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ---
@@ -73,7 +73,7 @@ QWAV replaces Archimedean (continuous) geometry with ultrametric (tree-based) ge
 
 ## License
 
-**QNFO Content License Agreement v1.1** — see [LICENSE](LICENSE) for full terms.
+**QNFO Unified License Agreement v2.1** — see [LICENSE](LICENSE) for full terms.
 
 Non-commercial use only. Attribution required. Patent prior-art citation mandatory.
 All QNFO org and rwnq8 personal repositories carry this license.
